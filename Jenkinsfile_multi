@@ -1,0 +1,45 @@
+node{
+  def mavenHome = tool name: 'Maven3.8.4' //defines maven variable 
+   stage('1Clone'){
+    git branch: 'stage', credentialsId: 'git_credentials', url: 'https://github.com/LandmarkTech-Nora/maven-web-app.git'
+   }
+   stage('2mavenBuild'){
+    sh "${mavenHome}/bin/mvn clean package" //calls maven and maven directory
+    //bat 'mvn package'(for windows)
+   }
+   /*
+   stage('3CodeQuality'){
+    sh "${mavenHome}/bin/mvn sonar:sonar" //calls maven and maven directory
+   }
+   stage('4.uploadArtifacts'){
+    sh "${mavenHome}/bin/mvn deploy" //calls maven and maven directory
+   }
+   */
+    stage('5.tomcatDeploy'){
+    deploy adapters: [tomcat9(credentialsId: 'tomcat_credentials', path: '', url: 'http://172.31.90.134:8080/')], contextPath: null, war: 'target/maven-web-app.war'
+   }
+   stage('6.DeployToUAT'){ //deploy using scp (check below for steps)
+    sshagent(['tomcat9']) { //crendentials from jenkins
+    sh "scp -o StrictHostKeyChecking=no target/*war ec2-user@172.31.90.134:/opt/tomcat9/webapps/uatapppli.war"
+    }
+   }
+   stage('7.DeployToProdAprovalReqired'){ //deploy using scp (check below for steps)
+    timeout(time:8, unit: 'HOURS'){
+      input message: 'Please verify and approve deployment to production'
+    }
+  }
+  stage('8.DeployToProduction'){ //deploy using scp (check below for steps)
+  sshagent(['tomcat9']) { //crendentials from jenkins
+  sh "scp -o StrictHostKeyChecking=no target/*war ec2-user@172.31.90.134:/opt/tomcat9/webapps/myapp.war"
+      
+  }
+      
+  }
+ stage('9.EmailAlerts'){
+  emailext body: '''Hi, 
+This is the build status for the BOA project.
+
+Regards
+Nora''', subject: 'Project status', to: 'gweanimbom@gmail.com'
+}
+}
