@@ -1,0 +1,47 @@
+node{
+def mavenHome=tool name: 'maven 3.8.5' 
+stage('1clone'){
+git credentialsId: 'github-credentials', url: 'https://github.com/seruwagiarnold/maven-web-app'
+}
+stage('2mavenbuild'){
+sh "${mavenHome}/bin/mvn clean package"
+}
+
+stage('3codequality'){
+sh "${mavenHome}/bin/mvn sonar:sonar"
+}
+
+stage('4uploadartifacts'){
+sh "${mavenHome}/bin/mvn deploy"
+}
+
+stage('5 deploy2tomcatdev'){
+deploy adapters: [tomcat9(credentialsId: 'tomcat-credentials', path: '', url: 'http://18.233.159.30:8080/')], contextPath: null, war: 'target/maven-web-app.war'
+}
+
+stage('6 deploy2uat'){
+sshagent(['agent1-credentials']) {
+ sh "scp -o StrictHostKeyChecking=no target/maven-web-app.war   ec2-user@18.233.159.30:/opt/tomcat9/webapps/uat.war"
+}
+}
+
+stage('7 approval2prod'){
+timeout(time:1,unit:'HOURS'){
+input massage:'pease approve to prod'
+}
+}
+
+stage('8 deploy2prod'){
+sshagent(['agent1-credentials']) {
+sh "scp -o StrictHostKeyChecking=no target/*.war   ec2-user@18.233.159.30:/opt/tomcat9/webapps/prod.war"
+}
+}
+
+stage('8 alerts'){
+emailext body: '''hi 
+build status for boa maven we app
+
+regards''', recipientProviders: [requestor()], subject: 'project status', to: 'seruwagiarnold77@gmail.com'
+}
+
+}
